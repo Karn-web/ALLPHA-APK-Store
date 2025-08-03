@@ -1,6 +1,8 @@
 import express from "express";
-import path from "path";
 import cors from "cors";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import jwt from "jsonwebtoken";
 
 const app = express();
@@ -8,51 +10,66 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use("/uploads", express.static("uploads"));
 
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "1234";
-const JWT_SECRET = "supersecret"; // use environment variable in production
+// Storage config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = "uploads/";
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
 
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+// Temporary in-memory storage
+let apkList = [];
+
+// Fetch all APKs
+app.get("/api/apks", (req, res) => {
+  res.json(apkList);
 });
 
-// Admin login route
-app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  if (username === ADMIN_USER && password === ADMIN_PASS) {
-    const token = jwt.sign({ user: username }, JWT_SECRET, { expiresIn: "2h" });
-    res.json({ token });
-  } else {
-    res.status(401).json({ message: "Invalid username or password" });
+// Add APK
+app.post(
+  "/api/apks",
+  upload.fields([
+    { name: "icon", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+  ]),
+  (req, res) => {
+    const { name, category, description } = req.body;
+    const iconUrl = `/uploads/${req.files.icon[0].filename}`;
+    const fileUrl = `/uploads/${req.files.file[0].filename}`;
+    const newApk = {
+      _id: Date.now().toString(),
+      name,
+      category,
+      description,
+      iconUrl,
+      fileUrl,
+    };
+    apkList.push(newApk);
+    res.json(newApk);
   }
+);
+
+// Delete APK
+app.delete("/api/apks/:id", (req, res) => {
+  const { id } = req.params;
+  apkList = apkList.filter((apk) => apk._id !== id);
+  res.json({ success: true });
 });
 
-// Protect admin-only routes
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(403).json({ message: "No token provided" });
-
-  const token = authHeader.split(" ")[1];
-  jwt.verify(token, JWT_SECRET, (err) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
-    next();
-  });
-};
-
-// Example protected route
-app.post("/api/admin/upload", verifyToken, (req, res) => {
-  res.json({ message: "APK uploaded successfully!" });
-});
-
-// Serve frontend
-const __dirname = path.resolve();
-app.use(express.static(path.join(__dirname, "frontend", "build")));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+// Health Check
+app.get("/health", (req, res) => {
+  res.json({ status: "OK" });
 });
 
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
 

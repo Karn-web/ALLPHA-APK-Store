@@ -6,22 +6,22 @@ function Header() {
   return (
     <header className="header">
       <div className="logo">
-        <Link to="/">ALLPHA APK Store</Link>
+        <Link to="/">
+          <img src="/logo.png" alt="ALLPHA APK STORE" className="logo-img" />
+          <span className="logo-text">ALLPHA APK STORE</span>
+        </Link>
       </div>
       <nav>
-        <ul>
-          <li><Link to="/">Home</Link></li>
-          <li><Link to="/about">About</Link></li>
-          <li><Link to="/contact">Contact</Link></li>
-          <li><Link to="/disclaimer">Disclaimer</Link></li>
-          <li><Link to="/privacy-policy">Privacy Policy</Link></li>
-          <li><Link to="/terms">Terms</Link></li>
-          <li><Link to="/admin">Admin</Link></li>
-        </ul>
+        <Link to="/">Home</Link>
+        <Link to="/about">About</Link>
+        <Link to="/contact">Contact</Link>
+        <Link to="/disclaimer">Disclaimer</Link>
+        <Link to="/admin">Admin</Link>
       </nav>
     </header>
   );
 }
 
 export default Header;
+
 
