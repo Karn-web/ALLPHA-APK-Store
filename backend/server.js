@@ -1,79 +1,58 @@
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const multer = require('multer');
-const fs = require('fs');
-const https = require('https');
+import express from "express";
+import path from "path";
+import cors from "cors";
+import jwt from "jsonwebtoken";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// ===== Health Check Endpoint =====
-app.get('/health', (req, res) => {
-  res.status(200).send({ status: 'OK', uptime: process.uptime() });
+const ADMIN_USER = "admin";
+const ADMIN_PASS = "1234";
+const JWT_SECRET = "supersecret"; // use environment variable in production
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
-// ===== Multer Storage Setup =====
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir);
-    }
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
-
-// ===== Upload Endpoint =====
-app.post('/api/upload', upload.single('apk'), (req, res) => {
-  try {
-    res.status(200).json({
-      message: 'APK uploaded successfully',
-      file: req.file
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+// Admin login route
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    const token = jwt.sign({ user: username }, JWT_SECRET, { expiresIn: "2h" });
+    res.json({ token });
+  } else {
+    res.status(401).json({ message: "Invalid username or password" });
   }
 });
 
-// ===== Serve Frontend Build =====
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+// Protect admin-only routes
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(403).json({ message: "No token provided" });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-});
-
-// ===== Global Error Handlers =====
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ Unhandled Rejection:', reason);
-});
-
-process.on('uncaughtException', err => {
-  console.error('💥 Uncaught Exception:', err);
-});
-
-// ===== Auto-Ping Script (Keeps Render Awake) =====
-setInterval(() => {
-  const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  https.get(url + '/health', (res) => {
-    console.log(`🔄 Auto-ping: ${url}/health -> ${res.statusCode}`);
-  }).on('error', (err) => {
-    console.error('Auto-ping error:', err.message);
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, JWT_SECRET, (err) => {
+    if (err) return res.status(403).json({ message: "Invalid token" });
+    next();
   });
-}, 5 * 60 * 1000); // every 5 minutes
+};
 
-// ===== Start Server =====
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+// Example protected route
+app.post("/api/admin/upload", verifyToken, (req, res) => {
+  res.json({ message: "APK uploaded successfully!" });
 });
+
+// Serve frontend
+const __dirname = path.resolve();
+app.use(express.static(path.join(__dirname, "frontend", "build")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "build", "index.html"));
+});
+
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
 
