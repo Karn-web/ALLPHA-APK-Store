@@ -1,10 +1,8 @@
 {
   "name": "apk-store-project",
   "version": "1.0.0",
-  "private": true,
   "scripts": {
-    "install:all": "npm install --prefix frontend && npm install --prefix backend",
-    "build": "npm run build --prefix frontend",
+    "build": "npm install --prefix frontend && npm run build --prefix frontend",
     "start": "node backend/server.js"
   },
   "engines": {
