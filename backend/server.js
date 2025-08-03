@@ -3,6 +3,7 @@ const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,11 +59,21 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', err => {
   console.error('💥 Uncaught Exception:', err);
-  // Optional: process.exit(1) if you want server to restart
 });
+
+// ===== Auto-Ping Script (Keeps Render Awake) =====
+setInterval(() => {
+  const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  https.get(url + '/health', (res) => {
+    console.log(`🔄 Auto-ping: ${url}/health -> ${res.statusCode}`);
+  }).on('error', (err) => {
+    console.error('Auto-ping error:', err.message);
+  });
+}, 5 * 60 * 1000); // every 5 minutes
 
 // ===== Start Server =====
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+
 
