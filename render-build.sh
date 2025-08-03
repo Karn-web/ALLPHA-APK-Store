@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -o errexit
 
-# Install and build frontend
+echo "📦 Installing frontend..."
 npm install --prefix frontend
 npm run build --prefix frontend
 
-# Install backend dependencies
+echo "📦 Installing backend..."
 npm install --prefix backend
+
