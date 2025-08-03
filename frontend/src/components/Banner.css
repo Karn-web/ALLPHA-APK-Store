@@ -1,0 +1,19 @@
+.banner {
+  width: 100%;
+  height: 250px;
+  background: linear-gradient(to right, #007bff, #00c6ff);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.banner img {
+  max-height: 100%;
+  max-width: 100%;
+  border-radius: 10px;
+}

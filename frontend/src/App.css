@@ -1,0 +1,151 @@
+/* General Reset */
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background: #f5f6fa;
+  color: #333;
+}
+
+.content {
+  min-height: 80vh;
+  padding: 20px;
+}
+
+/* Header */
+.header {
+  background: #1e1e2f;
+  color: #fff;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+.header nav a {
+  color: #ddd;
+  margin: 0 10px;
+  text-decoration: none;
+}
+.header nav a:hover {
+  color: #fff;
+}
+
+/* Footer */
+.footer {
+  background: #1e1e2f;
+  color: #ccc;
+  text-align: center;
+  padding: 10px 0;
+}
+.footer a {
+  color: #bbb;
+  text-decoration: none;
+}
+.footer a:hover {
+  color: #fff;
+}
+
+/* Banner */
+.banner {
+  background: linear-gradient(90deg, #6a11cb, #2575fc);
+  color: #fff;
+  text-align: center;
+  padding: 40px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.banner h2 {
+  margin-bottom: 10px;
+}
+
+/* SearchBar */
+.search-bar {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+/* APK Grid */
+.apk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 15px;
+}
+
+/* APK Card */
+.apk-card {
+  background: #fff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+.apk-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.apk-card h3 {
+  margin: 10px 0;
+}
+.apk-card a {
+  display: inline-block;
+  padding: 8px 12px;
+  background: #2575fc;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  margin-top: 10px;
+}
+.apk-card button {
+  display: block;
+  margin: 8px auto;
+  padding: 8px 12px;
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Admin Panel */
+.admin-panel {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.admin-panel .login,
+.admin-panel input,
+.admin-panel textarea {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px;
+}
+.admin-panel button {
+  background: #2575fc;
+  border: none;
+  color: #fff;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.admin-panel button:hover {
+  background: #1a5ed8;
+}
+
+/* Pages */
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+}
+.page h2 {
+  margin-bottom: 10px;
+}
