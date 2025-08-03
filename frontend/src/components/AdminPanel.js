@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import "./AdminPanel.css";
 
 function AdminPanel() {
   const [apks, setApks] = useState([]);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [icon, setIcon] = useState(null);
-  const [apkFile, setApkFile] = useState(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    category: "",
+    downloadUrl: "",
+    icon: null,
+    apk: null,
+  });
+
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     fetchApks();
@@ -16,53 +20,67 @@ function AdminPanel() {
 
   const fetchApks = async () => {
     const res = await axios.get("/apks");
-    setApks(res.data || []);
+    setApks(res.data);
   };
 
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!name || !apkFile) return alert("Name and APK file required!");
+  const handleChange = (e) => {
+    if (e.target.type === "file") {
+      setFormData({ ...formData, [e.target.name]: e.target.files[0] });
+    } else {
+      setFormData({ ...formData, [e.target.name]: e.target.value });
+    }
+  };
 
-    const formData = new FormData();
-    formData.append("name", name);
-    formData.append("description", description);
-    formData.append("category", category);
-    if (icon) formData.append("icon", icon);
-    formData.append("apkFile", apkFile);
+  const handleUpload = async () => {
+    const fd = new FormData();
+    Object.keys(formData).forEach((key) => fd.append(key, formData[key]));
 
-    await axios.post("/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+    await axios.post("/apks", fd, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-
+    alert("APK uploaded!");
     fetchApks();
-    setName("");
-    setDescription("");
-    setCategory("");
-    setIcon(null);
-    setApkFile(null);
+  };
+
+  const handleDelete = async (id) => {
+    await axios.delete(`/apks/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    fetchApks();
   };
 
   return (
     <div className="admin-panel">
       <h2>Admin Panel</h2>
-      <form onSubmit={handleUpload}>
-        <input placeholder="App Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <input placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
-        <label>App Icon:</label>
-        <input type="file" onChange={(e) => setIcon(e.target.files[0])} />
-        <label>APK File:</label>
-        <input type="file" onChange={(e) => setApkFile(e.target.files[0])} />
-        <button type="submit">Upload</button>
-      </form>
 
-      <h3>Uploaded Apps</h3>
+      <div className="upload-form">
+        <input name="name" placeholder="APK Name" onChange={handleChange} />
+        <textarea
+          name="description"
+          placeholder="Description"
+          onChange={handleChange}
+        />
+        <input name="category" placeholder="Category" onChange={handleChange} />
+        <input
+          name="downloadUrl"
+          placeholder="Download URL (optional)"
+          onChange={handleChange}
+        />
+        <input type="file" name="icon" onChange={handleChange} />
+        <input type="file" name="apk" onChange={handleChange} />
+        <button onClick={handleUpload}>Upload APK</button>
+      </div>
+
       <div className="apk-list">
+        <h3>Uploaded APKs</h3>
+        {apks.length === 0 && <p>No APKs uploaded yet</p>}
         {apks.map((apk) => (
-          <div key={apk.id} className="apk-item">
-            <img src={apk.icon ? `/${apk.icon}` : "/default-icon.png"} alt={apk.name} />
+          <div key={apk.id} className="apk-card">
+            {apk.icon && <img src={apk.icon} alt={apk.name} />}
             <h4>{apk.name}</h4>
             <p>{apk.description}</p>
+            <p>Category: {apk.category}</p>
+            <button onClick={() => handleDelete(apk.id)}>Delete</button>
           </div>
         ))}
       </div>
@@ -71,6 +89,7 @@ function AdminPanel() {
 }
 
 export default AdminPanel;
+
 
 
 
