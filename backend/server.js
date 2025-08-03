@@ -1,130 +1,112 @@
 import express from "express";
 import cors from "cors";
-import multer from "multer";
 import fs from "fs";
 import path from "path";
 import jwt from "jsonwebtoken";
+import multer from "multer";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = process.env.JWT_SECRET || "supersecretkey";
+const SECRET = "your-secret-key";
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
-app.use(express.static(path.join(path.resolve(), "frontend", "build"))); // serve React build
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// Storage setup for Multer
+// Data file
+const DATA_FILE = path.join(process.cwd(), "data.json");
+
+// Multer setup for file uploads
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), "uploads");
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+    cb(null, uploadDir);
   },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
-
 const upload = multer({ storage });
 
-// Data store
-const DATA_FILE = "apks.json";
-let apks = [];
-if (fs.existsSync(DATA_FILE)) {
-  apks = JSON.parse(fs.readFileSync(DATA_FILE));
-}
+// Health check
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// ---------- AUTH MIDDLEWARE ----------
-function authenticateToken(req, res, next) {
-  const token = req.headers["authorization"]?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token provided" });
-
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
-    req.user = user;
-    next();
-  });
-}
-
-// ---------- ROUTES ----------
-
-// Health check for Render auto-ping
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK" });
-});
-
-// Login for admin
+// Admin login
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
-  if (username === "admin" && password === "admin123") {
-    const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: "2h" });
+  if (username === "admin" && password === "password123") {
+    const token = jwt.sign({ username }, SECRET, { expiresIn: "1h" });
     return res.json({ token });
   }
-  return res.status(401).json({ message: "Invalid credentials" });
+  res.status(401).json({ error: "Invalid credentials" });
 });
+
+// Verify token middleware
+function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "No token" });
+  try {
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, SECRET);
+    next();
+  } catch {
+    return res.status(403).json({ error: "Invalid token" });
+  }
+}
 
 // Get all APKs
 app.get("/apks", (req, res) => {
-  res.json(apks);
+  try {
+    if (!fs.existsSync(DATA_FILE)) return res.json([]);
+    const data = JSON.parse(fs.readFileSync(DATA_FILE));
+    res.json(data);
+  } catch (err) {
+    console.error("Error reading APKs:", err);
+    res.status(500).json({ error: "Failed to load APKs" });
+  }
 });
 
-// Search APKs
-app.get("/apks/search/:query", (req, res) => {
-  const query = req.params.query.toLowerCase();
-  const results = apks.filter(
-    (apk) =>
-      apk.name.toLowerCase().includes(query) ||
-      apk.category.toLowerCase().includes(query)
-  );
-  res.json(results);
-});
-
-// Upload APK (secured)
-app.post(
-  "/apks",
-  authenticateToken,
-  upload.fields([{ name: "icon" }, { name: "apk" }]),
-  (req, res) => {
+// Add new APK
+app.post("/apks", verifyToken, upload.single("icon"), (req, res) => {
+  try {
     const { name, description, category, downloadUrl } = req.body;
-    if (!name || !category) {
-      return res.status(400).json({ message: "Name and category required" });
+    const image = req.file ? `/uploads/${req.file.filename}` : null;
+
+    if (!name || !description || !category || !downloadUrl || !image) {
+      return res.status(400).json({ error: "All fields required" });
     }
 
-    const newApk = {
-      id: Date.now(),
-      name,
-      description,
-      category,
-      icon: req.files["icon"]
-        ? "/uploads/" + req.files["icon"][0].filename
-        : null,
-      apkFile: req.files["apk"]
-        ? "/uploads/" + req.files["apk"][0].filename
-        : downloadUrl || null,
-    };
+    let data = [];
+    if (fs.existsSync(DATA_FILE)) {
+      data = JSON.parse(fs.readFileSync(DATA_FILE));
+    }
 
-    apks.push(newApk);
-    fs.writeFileSync(DATA_FILE, JSON.stringify(apks, null, 2));
-    res.status(201).json(newApk);
+    const newApk = { id: Date.now(), name, description, category, image, downloadUrl };
+    data.push(newApk);
+
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    res.json(newApk);
+  } catch (err) {
+    console.error("Error saving APK:", err);
+    res.status(500).json({ error: "Failed to save APK" });
   }
-);
+});
 
 // Delete APK
-app.delete("/apks/:id", authenticateToken, (req, res) => {
-  const id = parseInt(req.params.id);
-  apks = apks.filter((apk) => apk.id !== id);
-  fs.writeFileSync(DATA_FILE, JSON.stringify(apks, null, 2));
-  res.json({ message: "Deleted successfully" });
+app.delete("/apks/:id", verifyToken, (req, res) => {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return res.status(404).json({ error: "Not found" });
+    let data = JSON.parse(fs.readFileSync(DATA_FILE));
+    data = data.filter(apk => apk.id !== parseInt(req.params.id));
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete APK" });
+  }
 });
 
-// ---------- CATCH ALL (for React) ----------
-app.get("*", (req, res) => {
-  res.sendFile(path.join(path.resolve(), "frontend", "build", "index.html"));
-});
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
-// Start server
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
 
