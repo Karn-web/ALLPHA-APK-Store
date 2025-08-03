@@ -1,51 +1,51 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./Home.css";
-import Banner from "../components/Banner";
-import SearchBar from "../components/SearchBar";
 import ApkCard from "../components/ApkCard";
-import bannerImage from "./banner.jpg"; // Import banner image inside pages folder
+import "./Home.css";
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || "";
 
 function Home() {
   const [apks, setApks] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     axios
-      .get("http://localhost:5000/apks")
-      .then((res) => setApks(res.data))
-      .catch((err) => console.error(err));
+      .get(`${API_BASE_URL}/apks`)
+      .then((res) => {
+        if (Array.isArray(res.data)) {
+          setApks(res.data);
+        } else {
+          setApks([]);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching APKs:", err);
+        setApks([]);
+        setLoading(false);
+      });
   }, []);
 
-  const filteredApks = apks.filter((apk) =>
-    apk.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (loading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="home">
-      {/* Banner */}
-      <div className="banner-section">
-        <img src={bannerImage} alt="banner" className="banner" />
-      </div>
-
-      {/* Search bar */}
-      <SearchBar setSearchQuery={setSearchQuery} />
-
-      {/* APK cards */}
-      <div className="apk-grid">
-        {filteredApks.length > 0 ? (
-          filteredApks.map((apk, index) => (
+    <div className="home-container">
+      <h1 className="home-title">Allpha APK Store</h1>
+      <div className="apk-list">
+        {apks.length === 0 ? (
+          <p>No APKs available right now.</p>
+        ) : (
+          apks.map((apk, index) => (
             <ApkCard
               key={index}
               name={apk.name}
               description={apk.description}
               category={apk.category}
-              image={apk.image}
-              file={apk.file}
+              icon={apk.icon}
+              downloadUrl={apk.downloadUrl}
             />
           ))
-        ) : (
-          <p>No APKs found.</p>
         )}
       </div>
     </div>
@@ -53,4 +53,5 @@ function Home() {
 }
 
 export default Home;
+
 

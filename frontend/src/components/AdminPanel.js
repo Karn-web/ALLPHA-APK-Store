@@ -1,120 +1,124 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "./AdminPanel.css";
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+
 function AdminPanel() {
   const [apks, setApks] = useState([]);
-  const [newApk, setNewApk] = useState({
-    name: "",
-    category: "",
-    description: "",
-    icon: null,
-    file: null,
-  });
+  const [loading, setLoading] = useState(true);
 
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState("");
+  const [icon, setIcon] = useState("");
+
+  // Fetch APKs
   useEffect(() => {
-    fetchApks();
+    axios
+      .get(`${API_BASE_URL}/apks`)
+      .then((res) => {
+        if (Array.isArray(res.data)) {
+          setApks(res.data);
+        } else {
+          setApks([]);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching APKs:", err);
+        setApks([]);
+        setLoading(false);
+      });
   }, []);
 
-  const fetchApks = async () => {
-    try {
-      const res = await axios.get("/api/apks");
-      setApks(res.data);
-    } catch (err) {
-      console.error("Error fetching APKs:", err);
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
-    if (files) {
-      setNewApk({ ...newApk, [name]: files[0] });
-    } else {
-      setNewApk({ ...newApk, [name]: value });
-    }
-  };
-
-  const handleSubmit = async (e) => {
+  // Add new APK
+  const handleAddApk = (e) => {
     e.preventDefault();
-    const formData = new FormData();
-    formData.append("name", newApk.name);
-    formData.append("category", newApk.category);
-    formData.append("description", newApk.description);
-    formData.append("icon", newApk.icon);
-    formData.append("file", newApk.file);
+    const newApk = { name, description, category, downloadUrl, icon };
 
-    try {
-      await axios.post("/api/apks", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setNewApk({ name: "", category: "", description: "", icon: null, file: null });
-      fetchApks();
-    } catch (err) {
-      console.error("Error uploading APK:", err);
-    }
+    axios
+      .post(`${API_BASE_URL}/apks`, newApk)
+      .then((res) => {
+        setApks([...apks, res.data]);
+        setName("");
+        setDescription("");
+        setCategory("");
+        setDownloadUrl("");
+        setIcon("");
+      })
+      .catch((err) => console.error("Error adding APK:", err));
   };
 
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`/api/apks/${id}`);
-      fetchApks();
-    } catch (err) {
-      console.error("Error deleting APK:", err);
-    }
-  };
+  if (loading) return <div className="loading">Loading Admin Panel...</div>;
 
   return (
-    <div className="admin-panel">
-      <h2>Admin Panel</h2>
-      <form onSubmit={handleSubmit} className="upload-form">
+    <div className="admin-container">
+      <h1>Admin Panel</h1>
+
+      <form className="apk-form" onSubmit={handleAddApk}>
         <input
           type="text"
-          name="name"
-          placeholder="APK Name"
-          value={newApk.name}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="text"
-          name="category"
-          placeholder="Category"
-          value={newApk.category}
-          onChange={handleChange}
+          placeholder="App Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           required
         />
         <textarea
-          name="description"
           placeholder="Description"
-          value={newApk.description}
-          onChange={handleChange}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          required
+        ></textarea>
+        <input
+          type="text"
+          placeholder="Category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
           required
         />
-        <input type="file" name="icon" accept="image/*" onChange={handleChange} required />
-        <input type="file" name="file" accept=".apk" onChange={handleChange} required />
-        <button type="submit">Upload APK</button>
+        <input
+          type="text"
+          placeholder="Download URL"
+          value={downloadUrl}
+          onChange={(e) => setDownloadUrl(e.target.value)}
+          required
+        />
+        <input
+          type="text"
+          placeholder="Icon URL"
+          value={icon}
+          onChange={(e) => setIcon(e.target.value)}
+        />
+        <button type="submit">Add APK</button>
       </form>
 
       <div className="apk-list">
-        {apks.map((apk) => (
-          <div key={apk._id} className="apk-card">
-            <img src={apk.iconUrl} alt={apk.name} className="apk-icon" />
-            <div>
-              <h4>{apk.name}</h4>
-              <p>{apk.category}</p>
-              <p>{apk.description}</p>
-              <a href={apk.fileUrl} target="_blank" rel="noreferrer">
-                Download
-              </a>
+        {apks.length === 0 ? (
+          <p>No APKs available.</p>
+        ) : (
+          apks.map((apk, index) => (
+            <div className="apk-item" key={index}>
+              <img src={apk.icon} alt={apk.name} className="apk-icon" />
+              <div>
+                <h3>{apk.name}</h3>
+                <p>{apk.description}</p>
+                <small>{apk.category}</small>
+                <br />
+                <a href={apk.downloadUrl} target="_blank" rel="noreferrer">
+                  Download
+                </a>
+              </div>
             </div>
-            <button onClick={() => handleDelete(apk._id)}>Delete</button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 export default AdminPanel;
+
 
 
