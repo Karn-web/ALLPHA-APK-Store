@@ -1,126 +1,76 @@
 import express from "express";
-import cors from "cors";
 import multer from "multer";
-import path from "path";
 import fs from "fs";
-import bodyParser from "body-parser";
+import path from "path";
+import cors from "cors";
+import jwt from "jsonwebtoken";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.static("uploads"));
 
-// Folder to store uploads (APK & icons)
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+// Load APK list
+const dataFile = path.join("backend", "data.json");
+let apks = fs.existsSync(dataFile) ? JSON.parse(fs.readFileSync(dataFile)) : [];
+
+// Save helper
+function saveData() {
+  fs.writeFileSync(dataFile, JSON.stringify(apks, null, 2));
 }
 
-// Multer config (for file uploads)
+// Multer setup for icon + APK file
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
   },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    const fileName = Date.now() + "-" + file.fieldname + ext;
-    cb(null, fileName);
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + "-" + file.originalname);
   },
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage: storage });
+// Health check
+app.get("/health", (req, res) => res.send("OK"));
 
-// Serve uploaded files (icons & apks)
-app.use("/uploads", express.static(uploadDir));
-
-// In-memory database (replace with DB later)
-let apks = [];
-
-// Admin login (static credentials)
-const ADMIN_USER = process.env.ADMIN_USER || "admin";
-const ADMIN_PASS = process.env.ADMIN_PASS || "12345";
-
-// Health Check
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK" });
-});
-
-// Admin login route
-app.post("/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  if (username === ADMIN_USER && password === ADMIN_PASS) {
-    res.json({ success: true });
-  } else {
-    res.json({ success: false });
-  }
-});
-
-// Get all APKs
+// Fetch APKs
 app.get("/apks", (req, res) => {
   res.json(apks);
 });
 
-// Upload new APK
+// Upload APK (Admin)
 app.post(
-  "/apks",
+  "/upload",
   upload.fields([
-    { name: "apk", maxCount: 1 },
+    { name: "apkFile", maxCount: 1 },
     { name: "icon", maxCount: 1 },
   ]),
   (req, res) => {
-    try {
-      const { name, description, category } = req.body;
+    const { name, description, category } = req.body;
+    const apkFile = req.files.apkFile ? req.files.apkFile[0].filename : null;
+    const icon = req.files.icon ? req.files.icon[0].filename : null;
 
-      if (!req.files.apk || !req.files.icon) {
-        return res.status(400).json({ error: "APK and Icon are required!" });
-      }
-
-      const apkFile = req.files.apk[0];
-      const iconFile = req.files.icon[0];
-
-      const newApk = {
-        id: Date.now(),
-        name,
-        description,
-        category,
-        downloadUrl: `uploads/${apkFile.filename}`,
-        icon: `uploads/${iconFile.filename}`,
-      };
-
-      apks.push(newApk);
-      res.json({ success: true, apk: newApk });
-    } catch (err) {
-      console.error("Error uploading APK:", err);
-      res.status(500).json({ error: "Server error while uploading APK." });
+    if (!name || !apkFile) {
+      return res.status(400).json({ error: "Name and APK file required" });
     }
+
+    const newApk = {
+      id: Date.now(),
+      name,
+      description,
+      category,
+      icon,
+      downloadUrl: apkFile,
+    };
+
+    apks.push(newApk);
+    saveData();
+    res.json({ message: "APK added successfully", apk: newApk });
   }
 );
 
-// Delete an APK (if needed)
-app.delete("/apks/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-  apks = apks.filter((apk) => apk.id !== id);
-  res.json({ success: true });
-});
+app.listen(5000, () => console.log("Server running on port 5000"));
 
-// Catch-all for production (React build)
-const frontendPath = path.join(process.cwd(), "frontend", "build");
-if (fs.existsSync(frontendPath)) {
-  app.use(express.static(frontendPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendPath, "index.html"));
-  });
-}
-
-// Error handler middleware
-app.use((err, req, res, next) => {
-  console.error("Server Error:", err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
-});
-
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 
 
