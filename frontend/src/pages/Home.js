@@ -1,3 +1,4 @@
+import AdBanner from "../components/AdBanner";
 import React, { useState, useEffect } from "react";
 import ApkCard from "../components/ApkCard";
 import SearchBar from "../components/SearchBar";
@@ -20,6 +21,8 @@ function Home() {
     };
     fetchApks();
   }, []);
+  
+<AdBanner />
 
   const filteredApks = apks.filter(apk =>
     apk.name.toLowerCase().includes(search.toLowerCase())
