@@ -1,32 +1,15 @@
 {
-  "name": "apk-store-project",
+  "name": "apk-store-backend",
   "version": "1.0.0",
-  "description": "Allpha APK Store - Express Backend + React Frontend",
-  "main": "backend/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "build": "npm install --prefix frontend && npm run build --prefix frontend",
-    "dev": "nodemon backend/server.js"
+    "start": "node server.js"
   },
-  "keywords": [
-    "apk",
-    "store",
-    "nodejs",
-    "express",
-    "react",
-    "backend",
-    "frontend"
-  ],
-  "author": "Karn-web",
-  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.3"
+    "multer": "^1.4.5"
   }
 }
 
