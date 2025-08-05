@@ -1,105 +1,138 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import multer from 'multer';
+import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
+import session from 'express-session';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Session setup for login
+app.use(session({
+  secret: 'apkstore_secret_key',
+  resave: false,
+  saveUninitialized: true
+}));
+
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
 
-// MongoDB connection
-mongoose.connect('mongodb+srv://karnlaptop1:<db_password>@cluster0.xiqttcr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+// MongoDB setup
+mongoose.connect('mongodb://localhost:27017/apkstore', {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useUnifiedTopology: true
 }).then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Define schema
 const apkSchema = new mongoose.Schema({
-  name: String,
+  title: String,
   description: String,
   category: String,
-  imageUrl: String,
-  apkUrl: String,
+  apkFile: String,
+  imageFile: String
 });
 
-const APK = mongoose.model('APK', apkSchema);
+const Apk = mongoose.model('Apk', apkSchema);
 
-// Multer storage config
+// Multer setup
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const type = file.mimetype.includes('image') ? 'images' : 'apks';
-    const uploadPath = `uploads/${type}`;
-    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+  destination: (req, file, cb) => {
+    const uploadPath = file.mimetype.startsWith('image') ? 'uploads/images/' : 'uploads/apks/';
     cb(null, uploadPath);
   },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
 });
-
 const upload = multer({ storage });
 
-// Routes
-app.get('/api/apks', async (req, res) => {
-  const apks = await APK.find();
-  res.json(apks);
+// Auth Middleware
+function checkAuth(req, res, next) {
+  if (req.session && req.session.user === 'admin') {
+    return next();
+  } else {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+}
+
+// 🔐 Login API
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'admin' && password === 'admin123') {
+    req.session.user = 'admin';
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid credentials' });
+  }
 });
 
-app.post('/api/upload', upload.fields([
-  { name: 'image', maxCount: 1 },
-  { name: 'apk', maxCount: 1 }
+// 🚪 Logout API
+app.post('/api/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
+});
+
+// 📥 Upload APK
+app.post('/api/upload', checkAuth, upload.fields([
+  { name: 'apkFile', maxCount: 1 },
+  { name: 'imageFile', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { name, description, category } = req.body;
-    const imageUrl = req.files['image']?.[0]?.path;
-    const apkUrl = req.files['apk']?.[0]?.path;
+    const { title, description, category } = req.body;
+    const apkFile = req.files['apkFile'][0].filename;
+    const imageFile = req.files['imageFile'][0].filename;
 
-    const apk = new APK({
-      name,
-      description,
-      category,
-      imageUrl,
-      apkUrl,
-    });
-
-    await apk.save();
+    const newApk = new Apk({ title, description, category, apkFile, imageFile });
+    await newApk.save();
     res.status(201).json({ message: 'APK uploaded successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Something went wrong!' });
+    res.status(500).json({ message: 'Upload failed', error });
   }
 });
 
-app.delete('/api/apks/:id', async (req, res) => {
+// 📜 Get all APKs
+app.get('/api/apks', async (req, res) => {
   try {
-    const deleted = await APK.findByIdAndDelete(req.params.id);
-    res.json({ success: true, deleted });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete APK' });
+    const apks = await Apk.find();
+    res.json(apks);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch APKs', error });
   }
 });
 
-// ✅ Serve frontend (React build)
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+// ❌ Delete APK
+app.delete('/api/apks/:id', checkAuth, async (req, res) => {
+  try {
+    const apk = await Apk.findById(req.params.id);
+    if (!apk) return res.status(404).json({ message: 'APK not found' });
 
+    fs.unlinkSync(path.join(__dirname, '/uploads/apks/', apk.apkFile));
+    fs.unlinkSync(path.join(__dirname, '/uploads/images/', apk.imageFile));
+    await Apk.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'APK deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Delete failed', error });
+  }
+});
+
+// 📦 Serve frontend
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+
 
 
 
