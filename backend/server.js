@@ -1,71 +1,87 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
-
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const app = express();
+const PORT = process.env.PORT || 1000;
+
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "../frontend/build")));
+app.use("/uploads", express.static("uploads"));
 
-const PORT = process.env.PORT || 1000;
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'karn123';
-
-// Serve frontend build
-const buildPath = path.join(__dirname, '../frontend/build');
-app.use(express.static(buildPath));
-
-// Multer upload config
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, 'uploads'));
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname);
-  }
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-// Admin login route
-app.post('/admin/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    res.status(200).json({ success: true });
+// ✅ New simple security code-based admin auth
+app.post("/admin/login", (req, res) => {
+  const { code } = req.body;
+  if (code === "GURJANTSANDHU") {
+    res.json({ success: true });
   } else {
-    res.status(401).json({ success: false, message: 'Invalid credentials' });
+    res.status(401).json({ success: false, message: "Invalid security code" });
   }
 });
 
-// Upload APK route
-app.post('/api/upload', upload.single('apk'), (req, res) => {
-  if (!req.file) return res.status(400).send('No file uploaded.');
-  res.status(200).send('APK uploaded successfully');
+// Upload APK info
+let apkDataFile = "apks.json";
+const loadApkData = () => {
+  if (!fs.existsSync(apkDataFile)) fs.writeFileSync(apkDataFile, "[]");
+  return JSON.parse(fs.readFileSync(apkDataFile));
+};
+const saveApkData = (data) => fs.writeFileSync(apkDataFile, JSON.stringify(data, null, 2));
+
+// Upload route
+app.post("/upload", upload.single("apkFile"), (req, res) => {
+  const { name, description, category, imageUrl } = req.body;
+  const newApk = {
+    id: Date.now(),
+    name,
+    description,
+    category,
+    imageUrl,
+    file: req.file.filename,
+  };
+  const data = loadApkData();
+  data.push(newApk);
+  saveApkData(data);
+  res.json({ success: true, apk: newApk });
 });
 
-// Delete APK route
-app.delete('/api/delete/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, 'uploads', filename);
-  fs.unlink(filePath, (err) => {
-    if (err) return res.status(500).send('Error deleting file.');
-    res.send('File deleted successfully');
-  });
+// Get all APKs
+app.get("/apks", (req, res) => {
+  const data = loadApkData();
+  res.json(data);
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Frontend SPA route
-app.get('*', (req, res) => {
-  res.sendFile(path.join(buildPath, 'index.html'));
+// Delete APK
+app.delete("/apk/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  let data = loadApkData();
+  const apk = data.find((a) => a.id === id);
+  if (apk) {
+    fs.unlinkSync(path.join("uploads", apk.file));
+    data = data.filter((a) => a.id !== id);
+    saveApkData(data);
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ success: false });
+  }
 });
 
-// Start server
+// React frontend fallback
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
+});
+
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
+
 
 
 

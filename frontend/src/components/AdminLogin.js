@@ -1,47 +1,43 @@
+// frontend/src/pages/AdminLogin.jsx
 import React, { useState } from "react";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
-function AdminLogin({ setIsLoggedIn }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+const AdminLogin = () => {
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     try {
-      const res = await axios.post("/api/admin/login", { username, password });
-      localStorage.setItem("token", res.data.token); // Save token
-      setIsLoggedIn(true);
-    } catch (err) {
-      setError("Invalid username or password");
+      const res = await fetch("/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        navigate("/admin/dashboard");
+      } else {
+        setError("Invalid security code");
+      }
+    } catch {
+      setError("Server error");
     }
   };
 
   return (
-    <div className="admin-login">
-      <h2>Admin Login</h2>
+    <div>
+      <h2>Enter Security Code</h2>
+      <input
+        type="password"
+        placeholder="Security Code"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+      />
+      <button onClick={handleLogin}>Enter</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleLogin}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-        <br />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <br />
-        <button type="submit">Login</button>
-      </form>
     </div>
   );
-}
+};
 
 export default AdminLogin;
