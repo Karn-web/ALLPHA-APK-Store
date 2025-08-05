@@ -8,82 +8,87 @@ const session = require('express-session');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Session middleware
+// Session config
 app.use(session({
-  secret: 'apkstore_secret_key',
+  secret: 'secret_apk_store_key',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: true
 }));
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Admin login credentials
+// Login credentials
 const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'karn123'; // ← your new password
+const ADMIN_PASSWORD = 'karn123'; // your password
 
-// Middleware to protect admin routes
-function authMiddleware(req, res, next) {
-  if (req.session && req.session.loggedIn) {
+// Auth middleware
+function checkAuth(req, res, next) {
+  if (req.session.loggedIn) {
     next();
   } else {
     res.status(401).json({ error: 'Unauthorized' });
   }
 }
 
-// Handle login
+// Login API
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     req.session.loggedIn = true;
     res.json({ success: true });
   } else {
-    res.status(401).json({ error: 'Invalid username or password' });
+    res.status(401).json({ success: false, error: 'Invalid username or password' });
   }
 });
 
-// Handle logout
+// Logout
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => {
     res.json({ success: true });
   });
 });
 
-// Storage setup for file uploads
+// Storage setup
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
     cb(null, 'uploads/');
   },
-  filename: function (req, file, cb) {
+  filename: (req, file, cb) => {
     const uniqueName = Date.now() + '-' + file.originalname;
     cb(null, uniqueName);
   },
 });
 const upload = multer({ storage });
 
-// Load APK data from JSON
+// Read/write JSON
 const apkFilePath = path.join(__dirname, 'apk-data.json');
+
 function readApkData() {
   try {
     return JSON.parse(fs.readFileSync(apkFilePath));
-  } catch (err) {
+  } catch {
     return [];
   }
 }
+
 function saveApkData(data) {
   fs.writeFileSync(apkFilePath, JSON.stringify(data, null, 2));
 }
 
 // Upload APK
-app.post('/api/upload', authMiddleware, upload.fields([{ name: 'apk' }, { name: 'image' }]), (req, res) => {
+app.post('/api/upload', checkAuth, upload.fields([{ name: 'apk' }, { name: 'image' }]), (req, res) => {
   const { title, description, category } = req.body;
   const apkFile = req.files['apk']?.[0];
   const imageFile = req.files['image']?.[0];
 
   if (!apkFile || !imageFile) {
-    return res.status(400).json({ error: 'APK and image required' });
+    return res.status(400).json({ error: 'Both APK and image are required' });
   }
 
   const apkData = readApkData();
@@ -93,7 +98,7 @@ app.post('/api/upload', authMiddleware, upload.fields([{ name: 'apk' }, { name: 
     description,
     category,
     apkPath: `/uploads/${apkFile.filename}`,
-    imagePath: `/uploads/${imageFile.filename}`,
+    imagePath: `/uploads/${imageFile.filename}`
   };
   apkData.push(newApk);
   saveApkData(apkData);
@@ -101,33 +106,30 @@ app.post('/api/upload', authMiddleware, upload.fields([{ name: 'apk' }, { name: 
   res.json({ message: 'Upload successful', apk: newApk });
 });
 
-// Get all APKs
+// Get APKs
 app.get('/api/apks', (req, res) => {
   const apkData = readApkData();
   res.json(apkData);
 });
 
 // Delete APK
-app.delete('/api/delete/:id', authMiddleware, (req, res) => {
+app.delete('/api/delete/:id', checkAuth, (req, res) => {
   const id = parseInt(req.params.id);
   let apkData = readApkData();
-  const apkToDelete = apkData.find(apk => apk.id === id);
-
-  if (!apkToDelete) {
-    return res.status(404).json({ error: 'APK not found' });
-  }
+  const apk = apkData.find(item => item.id === id);
+  if (!apk) return res.status(404).json({ error: 'APK not found' });
 
   // Delete files
-  if (apkToDelete.apkPath) fs.unlinkSync(path.join(__dirname, apkToDelete.apkPath));
-  if (apkToDelete.imagePath) fs.unlinkSync(path.join(__dirname, apkToDelete.imagePath));
+  if (apk.apkPath) fs.unlinkSync(path.join(__dirname, apk.apkPath));
+  if (apk.imagePath) fs.unlinkSync(path.join(__dirname, apk.imagePath));
 
-  apkData = apkData.filter(apk => apk.id !== id);
+  apkData = apkData.filter(item => item.id !== id);
   saveApkData(apkData);
 
   res.json({ message: 'Deleted successfully' });
 });
 
-// Serve frontend (for production deployment)
+// Serve frontend build in production
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
@@ -137,6 +139,7 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
