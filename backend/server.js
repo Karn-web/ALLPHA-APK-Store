@@ -1,45 +1,61 @@
 const express = require('express');
-const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const SECURITY_CODE = 'GURJANTSANDHU';
+
+// Middlewares
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'frontend', 'build')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 🛡️ CSP Headers for Google Ads
+// Set CSP headers to allow Google Ads
 app.use((req, res, next) => {
   res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; frame-src 'self' https://www.google.com https://googleads.g.doubleclick.net; script-src 'self' https://www.googletagmanager.com https://pagead2.googlesyndication.com 'unsafe-inline'; img-src 'self' https://allpha-apk-store.onrender.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com"
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' https://pagead2.googlesyndication.com https://www.googletagservices.com; img-src 'self' https://*; style-src 'self' 'unsafe-inline'; frame-src 'self' https://www.google.com https://googleads.g.doubleclick.net"
   );
   next();
 });
 
-// 📁 Static frontend files
-app.use(express.static(path.join(__dirname, 'client', 'build')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// 📁 File upload setup
+// File Upload Configuration
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = './uploads';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
   },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + Date.now() + ext);
+  },
 });
+
 const upload = multer({ storage });
 
-// 🔐 Admin login using SECURITY CODE
-const SECURITY_CODE = 'GURJANTSANDHU';
+// Read APK data
+const readApks = () => {
+  try {
+    const data = fs.readFileSync('apks.json');
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+};
 
-app.post('/api/admin/login', (req, res) => {
+// Write APK data
+const writeApks = (data) => {
+  fs.writeFileSync('apks.json', JSON.stringify(data, null, 2));
+};
+
+// Routes
+
+// Security Code Login (no username/password)
+app.post('/api/login', (req, res) => {
   const { code } = req.body;
   if (code === SECURITY_CODE) {
     res.json({ success: true });
@@ -48,101 +64,49 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// 📤 Upload new APK
-app.post('/api/apks', upload.single('apk'), (req, res) => {
-  const { title, description, category } = req.body;
-  const apkFile = req.file;
-  if (!apkFile) {
-    return res.status(400).json({ success: false, message: 'APK file is required' });
-  }
-
-  const apkData = {
-    id: Date.now(),
-    title,
-    description,
-    category,
-    apkUrl: `/uploads/${apkFile.filename}`,
-    imageUrl: ''
-  };
-
-  const dbPath = path.join(__dirname, 'apks.json');
-  const apks = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath)) : [];
-  apks.push(apkData);
-  fs.writeFileSync(dbPath, JSON.stringify(apks, null, 2));
-
-  res.json({ success: true, apk: apkData });
-});
-
-// 🖼️ Upload image separately
-app.post('/api/apks/:id/image', upload.single('image'), (req, res) => {
-  const { id } = req.params;
-  const imageFile = req.file;
-  if (!imageFile) {
-    return res.status(400).json({ success: false, message: 'Image file is required' });
-  }
-
-  const dbPath = path.join(__dirname, 'apks.json');
-  const apks = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath)) : [];
-
-  const apkIndex = apks.findIndex(apk => apk.id === parseInt(id));
-  if (apkIndex === -1) {
-    return res.status(404).json({ success: false, message: 'APK not found' });
-  }
-
-  apks[apkIndex].imageUrl = `/uploads/${imageFile.filename}`;
-  fs.writeFileSync(dbPath, JSON.stringify(apks, null, 2));
-
-  res.json({ success: true, apk: apks[apkIndex] });
-});
-
-// 🧾 Fetch all APKs
+// Get all APKs
 app.get('/api/apks', (req, res) => {
-  const dbPath = path.join(__dirname, 'apks.json');
-  const apks = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath)) : [];
+  const apks = readApks();
   res.json(apks);
 });
 
-// ❌ Delete APK
-app.delete('/api/apks/:id', (req, res) => {
-  const { id } = req.params;
-  const dbPath = path.join(__dirname, 'apks.json');
-  let apks = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath)) : [];
+// Upload APK
+app.post('/api/upload', upload.single('apk'), (req, res) => {
+  const { name, description, category, image } = req.body;
+  const apks = readApks();
 
-  const apkIndex = apks.findIndex(apk => apk.id === parseInt(id));
-  if (apkIndex === -1) {
-    return res.status(404).json({ success: false, message: 'APK not found' });
-  }
+  const newApk = {
+    id: Date.now().toString(),
+    name,
+    description,
+    category,
+    image,
+    apkFile: `/uploads/${req.file.filename}`,
+  };
 
-  // Delete uploaded files
-  const apkToDelete = apks[apkIndex];
-  if (apkToDelete.apkUrl) {
-    const apkPath = path.join(__dirname, apkToDelete.apkUrl);
-    if (fs.existsSync(apkPath)) fs.unlinkSync(apkPath);
-  }
-  if (apkToDelete.imageUrl) {
-    const imagePath = path.join(__dirname, apkToDelete.imageUrl);
-    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-  }
+  apks.push(newApk);
+  writeApks(apks);
+  res.json({ success: true, apk: newApk });
+});
 
-  apks.splice(apkIndex, 1);
-  fs.writeFileSync(dbPath, JSON.stringify(apks, null, 2));
+// Delete APK
+app.delete('/api/delete/:id', (req, res) => {
+  const apks = readApks();
+  const filtered = apks.filter((apk) => apk.id !== req.params.id);
+  writeApks(filtered);
   res.json({ success: true });
 });
 
-// 🌐 React frontend catch-all route
+// Serve Frontend
 app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'client', 'build', 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).send('Frontend build not found');
-  }
+  res.sendFile(path.join(__dirname, 'frontend', 'build', 'index.html'));
 });
 
-// 🚀 Start server
+// Start Server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
+
 
 
 
