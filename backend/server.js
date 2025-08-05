@@ -1,124 +1,106 @@
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import path from "path";
-import jwt from "jsonwebtoken";
-import multer from "multer";
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const SECRET = "your-secret-key";
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json());
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const DATA_FILE = path.join(process.cwd(), "data.json");
+// MongoDB connection
+mongoose.connect('mongodb+srv://karnlaptop1:<db_password>@cluster0.xiqttcr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+}).then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), "uploads");
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + path.extname(file.originalname)),
+// Define schema
+const apkSchema = new mongoose.Schema({
+  name: String,
+  description: String,
+  category: String,
+  imageUrl: String,
+  apkUrl: String,
 });
+
+const APK = mongoose.model('APK', apkSchema);
+
+// Multer storage config
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const type = file.mimetype.includes('image') ? 'images' : 'apks';
+    const uploadPath = `uploads/${type}`;
+    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  },
+});
+
 const upload = multer({ storage });
 
-app.get("/health", (req, res) => res.json({ status: "ok" }));
-
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
-  if (username === "admin" && password === "password123") {
-    const token = jwt.sign({ username }, SECRET, { expiresIn: "1h" });
-    return res.json({ token });
-  }
-  res.status(401).json({ error: "Invalid credentials" });
+// Routes
+app.get('/api/apks', async (req, res) => {
+  const apks = await APK.find();
+  res.json(apks);
 });
 
-function verifyToken(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "No token" });
+app.post('/api/upload', upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'apk', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const token = authHeader.split(" ")[1];
-    jwt.verify(token, SECRET);
-    next();
-  } catch {
-    return res.status(403).json({ error: "Invalid token" });
-  }
-}
+    const { name, description, category } = req.body;
+    const imageUrl = req.files['image']?.[0]?.path;
+    const apkUrl = req.files['apk']?.[0]?.path;
 
-app.get("/apks", (req, res) => {
-  try {
-    if (!fs.existsSync(DATA_FILE)) return res.json([]);
-    const data = JSON.parse(fs.readFileSync(DATA_FILE));
-    res.json(data);
-  } catch (err) {
-    console.error("Error reading APKs:", err);
-    res.status(500).json({ error: "Failed to load APKs" });
-  }
-});
-
-const multiUpload = upload.fields([
-  { name: "icon", maxCount: 1 },
-  { name: "apk", maxCount: 1 },
-]);
-
-app.post("/apks", verifyToken, multiUpload, (req, res) => {
-  try {
-    const { name, description, category, downloadUrl } = req.body;
-    const icon = req.files.icon ? `/uploads/${req.files.icon[0].filename}` : null;
-    const apk = req.files.apk ? `/uploads/${req.files.apk[0].filename}` : null;
-
-    if (!name || !description || !category || !icon || (!apk && !downloadUrl)) {
-      return res.status(400).json({ error: "All required fields missing" });
-    }
-
-    let data = [];
-    if (fs.existsSync(DATA_FILE)) {
-      data = JSON.parse(fs.readFileSync(DATA_FILE));
-    }
-
-    const newApk = {
-      id: Date.now(),
+    const apk = new APK({
       name,
       description,
       category,
-      icon,
-      downloadUrl: downloadUrl || apk,
-    };
+      imageUrl,
+      apkUrl,
+    });
 
-    data.push(newApk);
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    res.json(newApk);
-  } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ error: "Failed to save APK" });
+    await apk.save();
+    res.status(201).json({ message: 'APK uploaded successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Something went wrong!' });
   }
 });
 
-app.delete("/apks/:id", verifyToken, (req, res) => {
+app.delete('/api/apks/:id', async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_FILE)) return res.status(404).json({ error: "Not found" });
-    let data = JSON.parse(fs.readFileSync(DATA_FILE));
-    data = data.filter((apk) => apk.id !== parseInt(req.params.id));
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    res.json({ success: true });
+    const deleted = await APK.findByIdAndDelete(req.params.id);
+    res.json({ success: true, deleted });
   } catch (err) {
-    res.status(500).json({ error: "Failed to delete APK" });
+    res.status(500).json({ error: 'Failed to delete APK' });
   }
 });
 
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-
-import path from 'path';
-// Serve React build
+// ✅ Serve frontend (React build)
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
+
 
 
 
