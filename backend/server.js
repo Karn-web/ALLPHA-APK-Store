@@ -3,25 +3,27 @@ const cors = require("cors");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const dotenv = require("dotenv");
+
+// Load .env variables
+dotenv.config();
 
 const app = express();
-
-// Use Render port or fallback to 5000 for local
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 1000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Hardcoded admin login credentials
+// Hardcoded Admin Credentials
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "karn123";
 
-// JSON file for APK info
+// Data File
 const DATA_FILE = "apkData.json";
 
-// Setup multer storage
+// Multer Setup for APK + Image Upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -33,14 +35,14 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Load existing APKs
+// Load APKs from JSON
 const loadAPKData = () => {
   if (!fs.existsSync(DATA_FILE)) return [];
   const data = fs.readFileSync(DATA_FILE);
   return JSON.parse(data);
 };
 
-// Save APK data
+// Save APKs to JSON
 const saveAPKData = (data) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
@@ -56,7 +58,7 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ✅ Upload APK
+// ✅ Upload APK + Image
 app.post("/api/upload", upload.fields([
   { name: "apkFile" },
   { name: "image" }
@@ -66,7 +68,7 @@ app.post("/api/upload", upload.fields([
   const image = req.files["image"]?.[0];
 
   if (!apkFile || !image) {
-    return res.status(400).json({ success: false, message: "Both APK file and image are required." });
+    return res.status(400).json({ success: false, message: "APK file and image are required." });
   }
 
   const newAPK = {
@@ -86,7 +88,7 @@ app.post("/api/upload", upload.fields([
   res.json({ success: true, message: "APK uploaded successfully", data: newAPK });
 });
 
-// ✅ Get all APKs
+// ✅ Get All APKs
 app.get("/api/apks", (req, res) => {
   const apkData = loadAPKData();
   res.json(apkData);
@@ -102,7 +104,7 @@ app.delete("/api/delete/:id", (req, res) => {
     return res.status(404).json({ success: false, message: "APK not found" });
   }
 
-  // Delete APK & image files
+  // Delete Files
   try {
     if (fs.existsSync(apk.apkPath)) fs.unlinkSync(apk.apkPath);
     if (fs.existsSync(apk.imagePath)) fs.unlinkSync(apk.imagePath);
@@ -116,7 +118,7 @@ app.delete("/api/delete/:id", (req, res) => {
   res.json({ success: true, message: "APK deleted successfully" });
 });
 
-// ✅ Start server
+// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
