@@ -66,7 +66,7 @@ function checkAuth(req, res, next) {
 // 🔐 Login API
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === 'admin123') {
+  if (username === 'admin' && password === 'karn123') {
     req.session.user = 'admin';
     res.json({ success: true });
   } else {
