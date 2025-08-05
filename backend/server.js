@@ -1,121 +1,117 @@
 const express = require('express');
+const cors = require('cors');
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
 const path = require('path');
-const cors = require('cors');
-
 const app = express();
 const PORT = 1000;
 
-// ✅ Secure your server with proper headers
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: https://allpha-apk-store.onrender.com; script-src 'self'; style-src 'self' 'unsafe-inline'"
-  );
-  next();
-});
-
+// Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(fileUpload());
-
-// ✅ Serve frontend React build
 app.use(express.static(path.join(__dirname, '../frontend/build')));
-
-// ✅ Store data in local JSON
-const dataPath = path.join(__dirname, 'data.json');
-
-function readData() {
-  if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify([]));
-  const data = fs.readFileSync(dataPath);
-  return JSON.parse(data);
-}
-
-function writeData(data) {
-  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-}
-
-// ✅ Serve uploaded APKs & images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ Admin Panel Route (Security Code Check)
-app.get('/admin', (req, res) => {
-  const code = req.query.code;
-  if (code === 'GURJANTSANDHU') {
-    res.sendFile(path.join(__dirname, '../frontend/build/admin.html'));
-  } else {
-    res.status(401).send('Unauthorized - Invalid Security Code');
-  }
-});
+// Security code (replaces old username/password system)
+const SECURITY_CODE = 'GURJANTSANDHU';
 
-// ✅ Get all APKs
+// Get all APKs
 app.get('/api/apks', (req, res) => {
-  const apks = readData();
-  res.json(apks);
+  fs.readFile('apkData.json', 'utf8', (err, data) => {
+    if (err) return res.status(500).json({ error: 'Failed to read APK data' });
+    try {
+      const parsedData = JSON.parse(data);
+      res.json(parsedData);
+    } catch (e) {
+      res.status(500).json({ error: 'Corrupted APK data' });
+    }
+  });
 });
 
-// ✅ Upload new APK with image
+// Admin login using security code
+app.post('/api/admin-login', (req, res) => {
+  const { code } = req.body;
+  if (code === SECURITY_CODE) {
+    return res.json({ success: true });
+  }
+  return res.status(401).json({ success: false, message: 'Invalid security code' });
+});
+
+// Upload new APK
 app.post('/api/upload', (req, res) => {
   const { name, description, category } = req.body;
-  const apk = req.files?.apk;
-  const image = req.files?.image;
+  const apkFile = req.files?.apk;
+  const imageFile = req.files?.image;
 
-  if (!name || !description || !category || !apk || !image) {
-    return res.status(400).json({ error: 'All fields are required.' });
-  }
+  if (!apkFile || !imageFile) return res.status(400).json({ error: 'Both APK and image required' });
 
-  const apkPath = `uploads/${Date.now()}_${apk.name}`;
-  const imagePath = `uploads/${Date.now()}_${image.name}`;
+  const apkPath = path.join(__dirname, 'uploads', apkFile.name);
+  const imagePath = path.join(__dirname, 'uploads', imageFile.name);
 
-  apk.mv(apkPath);
-  image.mv(imagePath);
+  apkFile.mv(apkPath, err => {
+    if (err) return res.status(500).json({ error: 'Failed to save APK' });
 
-  const data = readData();
-  const newApk = {
-    id: Date.now(),
-    name,
-    description,
-    category,
-    apk: `/${apkPath}`,
-    image: `/${imagePath}`
-  };
-  data.push(newApk);
-  writeData(data);
+    imageFile.mv(imagePath, err => {
+      if (err) return res.status(500).json({ error: 'Failed to save image' });
 
-  res.json({ message: 'APK uploaded successfully.', apk: newApk });
+      const newAPK = {
+        id: Date.now(),
+        name,
+        description,
+        category,
+        apkUrl: `/uploads/${apkFile.name}`,
+        imageUrl: `/uploads/${imageFile.name}`,
+      };
+
+      fs.readFile('apkData.json', 'utf8', (err, data) => {
+        const apkData = err ? [] : JSON.parse(data || '[]');
+        apkData.push(newAPK);
+
+        fs.writeFile('apkData.json', JSON.stringify(apkData, null, 2), err => {
+          if (err) return res.status(500).json({ error: 'Failed to save data' });
+          res.json({ success: true, apk: newAPK });
+        });
+      });
+    });
+  });
 });
 
-// ✅ Delete APK by ID
+// Delete APK
 app.delete('/api/delete/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  let data = readData();
-  const apkToDelete = data.find((apk) => apk.id === id);
+  const apkId = parseInt(req.params.id);
 
-  if (!apkToDelete) {
-    return res.status(404).json({ error: 'APK not found' });
-  }
+  fs.readFile('apkData.json', 'utf8', (err, data) => {
+    if (err) return res.status(500).json({ error: 'Failed to read APK data' });
 
-  // Delete files
-  fs.unlinkSync(path.join(__dirname, apkToDelete.apk));
-  fs.unlinkSync(path.join(__dirname, apkToDelete.image));
+    const apkData = JSON.parse(data);
+    const apkToDelete = apkData.find(a => a.id === apkId);
 
-  // Remove from JSON
-  data = data.filter((apk) => apk.id !== id);
-  writeData(data);
+    if (!apkToDelete) return res.status(404).json({ error: 'APK not found' });
 
-  res.json({ message: 'APK deleted successfully.' });
+    fs.unlink(path.join(__dirname, apkToDelete.apkUrl), () => {});
+    fs.unlink(path.join(__dirname, apkToDelete.imageUrl), () => {});
+
+    const updatedData = apkData.filter(a => a.id !== apkId);
+
+    fs.writeFile('apkData.json', JSON.stringify(updatedData, null, 2), err => {
+      if (err) return res.status(500).json({ error: 'Failed to update data' });
+      res.json({ success: true });
+    });
+  });
 });
 
-// ✅ Catch-all route for React routing
+// Fallback to React
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
-// ✅ Start server on PORT 1000
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });
+
+
 
 
 
