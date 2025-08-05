@@ -9,29 +9,25 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET = "your-secret-key";
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// Data file
 const DATA_FILE = path.join(process.cwd(), "data.json");
 
-// Multer setup for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), "uploads");
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + path.extname(file.originalname)),
 });
 const upload = multer({ storage });
 
-// Health check
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// Admin login
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
   if (username === "admin" && password === "password123") {
@@ -41,7 +37,6 @@ app.post("/login", (req, res) => {
   res.status(401).json({ error: "Invalid credentials" });
 });
 
-// Verify token middleware
 function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: "No token" });
@@ -54,7 +49,6 @@ function verifyToken(req, res, next) {
   }
 }
 
-// Get all APKs
 app.get("/apks", (req, res) => {
   try {
     if (!fs.existsSync(DATA_FILE)) return res.json([]);
@@ -66,14 +60,19 @@ app.get("/apks", (req, res) => {
   }
 });
 
-// Add new APK
-app.post("/apks", verifyToken, upload.single("icon"), (req, res) => {
+const multiUpload = upload.fields([
+  { name: "icon", maxCount: 1 },
+  { name: "apk", maxCount: 1 },
+]);
+
+app.post("/apks", verifyToken, multiUpload, (req, res) => {
   try {
     const { name, description, category, downloadUrl } = req.body;
-    const image = req.file ? `/uploads/${req.file.filename}` : null;
+    const icon = req.files.icon ? `/uploads/${req.files.icon[0].filename}` : null;
+    const apk = req.files.apk ? `/uploads/${req.files.apk[0].filename}` : null;
 
-    if (!name || !description || !category || !downloadUrl || !image) {
-      return res.status(400).json({ error: "All fields required" });
+    if (!name || !description || !category || !icon || (!apk && !downloadUrl)) {
+      return res.status(400).json({ error: "All required fields missing" });
     }
 
     let data = [];
@@ -81,23 +80,29 @@ app.post("/apks", verifyToken, upload.single("icon"), (req, res) => {
       data = JSON.parse(fs.readFileSync(DATA_FILE));
     }
 
-    const newApk = { id: Date.now(), name, description, category, image, downloadUrl };
-    data.push(newApk);
+    const newApk = {
+      id: Date.now(),
+      name,
+      description,
+      category,
+      icon,
+      downloadUrl: downloadUrl || apk,
+    };
 
+    data.push(newApk);
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     res.json(newApk);
   } catch (err) {
-    console.error("Error saving APK:", err);
+    console.error("Upload error:", err);
     res.status(500).json({ error: "Failed to save APK" });
   }
 });
 
-// Delete APK
 app.delete("/apks/:id", verifyToken, (req, res) => {
   try {
     if (!fs.existsSync(DATA_FILE)) return res.status(404).json({ error: "Not found" });
     let data = JSON.parse(fs.readFileSync(DATA_FILE));
-    data = data.filter(apk => apk.id !== parseInt(req.params.id));
+    data = data.filter((apk) => apk.id !== parseInt(req.params.id));
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     res.json({ success: true });
   } catch (err) {
@@ -106,6 +111,7 @@ app.delete("/apks/:id", verifyToken, (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
 
 
 

@@ -33,13 +33,32 @@ function AdminPanel() {
 
   const handleUpload = async () => {
     const fd = new FormData();
-    Object.keys(formData).forEach((key) => fd.append(key, formData[key]));
-
-    await axios.post("/apks", fd, {
-      headers: { Authorization: `Bearer ${token}` },
+    Object.keys(formData).forEach((key) => {
+      if (formData[key]) {
+        fd.append(key, formData[key]);
+      }
     });
-    alert("APK uploaded!");
-    fetchApks();
+
+    try {
+      await axios.post("/apks", fd, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      alert("APK uploaded!");
+      setFormData({
+        name: "",
+        description: "",
+        category: "",
+        downloadUrl: "",
+        icon: null,
+        apk: null,
+      });
+      fetchApks();
+    } catch (err) {
+      alert("Upload failed: " + err.response?.data?.error || err.message);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -89,6 +108,7 @@ function AdminPanel() {
 }
 
 export default AdminPanel;
+
 
 
 
