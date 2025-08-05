@@ -5,33 +5,35 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = 5000;
 
+// Use Render port or fallback to 5000 for local
+const PORT = process.env.PORT || 5000;
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Hardcoded admin login
+// Hardcoded admin login credentials
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "karn123";
 
-// JSON file to store APK data
+// JSON file for APK info
 const DATA_FILE = "apkData.json";
 
-// Multer storage setup
+// Setup multer storage
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
     cb(null, "uploads/");
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + file.originalname;
-    cb(null, uniqueSuffix);
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
   },
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage: storage });
-
-// Load APK data
+// Load existing APKs
 const loadAPKData = () => {
   if (!fs.existsSync(DATA_FILE)) return [];
   const data = fs.readFileSync(DATA_FILE);
@@ -43,7 +45,7 @@ const saveAPKData = (data) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
-// ✅ LOGIN route
+// ✅ Admin Login
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -54,14 +56,17 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ✅ UPLOAD APK route
-app.post("/api/upload", upload.fields([{ name: "apkFile" }, { name: "image" }]), (req, res) => {
+// ✅ Upload APK
+app.post("/api/upload", upload.fields([
+  { name: "apkFile" },
+  { name: "image" }
+]), (req, res) => {
   const { title, description, category } = req.body;
   const apkFile = req.files["apkFile"]?.[0];
   const image = req.files["image"]?.[0];
 
   if (!apkFile || !image) {
-    return res.status(400).json({ success: false, message: "APK file and image are required" });
+    return res.status(400).json({ success: false, message: "Both APK file and image are required." });
   }
 
   const newAPK = {
@@ -78,41 +83,44 @@ app.post("/api/upload", upload.fields([{ name: "apkFile" }, { name: "image" }]),
   apkData.push(newAPK);
   saveAPKData(apkData);
 
-  res.json({ success: true, message: "APK uploaded", data: newAPK });
+  res.json({ success: true, message: "APK uploaded successfully", data: newAPK });
 });
 
-// ✅ GET all APKs
+// ✅ Get all APKs
 app.get("/api/apks", (req, res) => {
   const apkData = loadAPKData();
   res.json(apkData);
 });
 
-// ✅ DELETE APK by ID
+// ✅ Delete APK by ID
 app.delete("/api/delete/:id", (req, res) => {
   const id = parseInt(req.params.id);
   let apkData = loadAPKData();
 
-  const apk = apkData.find((apk) => apk.id === id);
-  if (!apk) return res.status(404).json({ success: false, message: "APK not found" });
+  const apk = apkData.find((a) => a.id === id);
+  if (!apk) {
+    return res.status(404).json({ success: false, message: "APK not found" });
+  }
 
-  // Delete files
+  // Delete APK & image files
   try {
     if (fs.existsSync(apk.apkPath)) fs.unlinkSync(apk.apkPath);
     if (fs.existsSync(apk.imagePath)) fs.unlinkSync(apk.imagePath);
-  } catch (e) {
-    console.error("File delete error:", e);
+  } catch (err) {
+    console.error("File delete error:", err);
   }
 
-  apkData = apkData.filter((apk) => apk.id !== id);
+  apkData = apkData.filter((a) => a.id !== id);
   saveAPKData(apkData);
 
-  res.json({ success: true, message: "APK deleted" });
+  res.json({ success: true, message: "APK deleted successfully" });
 });
 
 // ✅ Start server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
+
 
 
 
