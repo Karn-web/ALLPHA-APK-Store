@@ -1,5 +1,5 @@
 const express = require('express');
-const multer = require('multer');
+const fileUpload = require('express-fileupload');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
@@ -7,81 +7,116 @@ const cors = require('cors');
 const app = express();
 const PORT = 1000;
 
+// ✅ Secure your server with proper headers
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self' data: https://allpha-apk-store.onrender.com; script-src 'self'; style-src 'self' 'unsafe-inline'"
+  );
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static('uploads'));
+app.use(fileUpload());
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = 'uploads/';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
+// ✅ Serve frontend React build
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// ✅ Security code-based login (NO username/password)
-const SECURITY_CODE = "GURJANTSANDHU";
+// ✅ Store data in local JSON
+const dataPath = path.join(__dirname, 'data.json');
 
-app.post('/admin/login', (req, res) => {
-  const { code } = req.body;
-  if (code === SECURITY_CODE) {
-    res.json({ success: true });
+function readData() {
+  if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify([]));
+  const data = fs.readFileSync(dataPath);
+  return JSON.parse(data);
+}
+
+function writeData(data) {
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+}
+
+// ✅ Serve uploaded APKs & images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ✅ Admin Panel Route (Security Code Check)
+app.get('/admin', (req, res) => {
+  const code = req.query.code;
+  if (code === 'GURJANTSANDHU') {
+    res.sendFile(path.join(__dirname, '../frontend/build/admin.html'));
   } else {
-    res.status(401).json({ success: false, message: "Invalid security code" });
+    res.status(401).send('Unauthorized - Invalid Security Code');
   }
 });
 
-// ✅ Upload route
-app.post('/upload', upload.single('apk'), (req, res) => {
-  const { title, description, category } = req.body;
-  const apkInfo = {
-    title,
+// ✅ Get all APKs
+app.get('/api/apks', (req, res) => {
+  const apks = readData();
+  res.json(apks);
+});
+
+// ✅ Upload new APK with image
+app.post('/api/upload', (req, res) => {
+  const { name, description, category } = req.body;
+  const apk = req.files?.apk;
+  const image = req.files?.image;
+
+  if (!name || !description || !category || !apk || !image) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  const apkPath = `uploads/${Date.now()}_${apk.name}`;
+  const imagePath = `uploads/${Date.now()}_${image.name}`;
+
+  apk.mv(apkPath);
+  image.mv(imagePath);
+
+  const data = readData();
+  const newApk = {
+    id: Date.now(),
+    name,
     description,
     category,
-    file: req.file.filename,
-    date: new Date()
+    apk: `/${apkPath}`,
+    image: `/${imagePath}`
   };
+  data.push(newApk);
+  writeData(data);
 
-  let data = [];
-  if (fs.existsSync('data.json')) {
-    data = JSON.parse(fs.readFileSync('data.json'));
-  }
-  data.push(apkInfo);
-  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
-  res.json({ success: true, message: 'APK uploaded successfully!' });
+  res.json({ message: 'APK uploaded successfully.', apk: newApk });
 });
 
-// ✅ Get APK list
-app.get('/apks', (req, res) => {
-  if (fs.existsSync('data.json')) {
-    const data = JSON.parse(fs.readFileSync('data.json'));
-    res.json(data);
-  } else {
-    res.json([]);
+// ✅ Delete APK by ID
+app.delete('/api/delete/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  let data = readData();
+  const apkToDelete = data.find((apk) => apk.id === id);
+
+  if (!apkToDelete) {
+    return res.status(404).json({ error: 'APK not found' });
   }
+
+  // Delete files
+  fs.unlinkSync(path.join(__dirname, apkToDelete.apk));
+  fs.unlinkSync(path.join(__dirname, apkToDelete.image));
+
+  // Remove from JSON
+  data = data.filter((apk) => apk.id !== id);
+  writeData(data);
+
+  res.json({ message: 'APK deleted successfully.' });
 });
 
-// ✅ Delete APK
-app.delete('/apks/:filename', (req, res) => {
-  const filename = req.params.filename;
-  let data = JSON.parse(fs.readFileSync('data.json'));
-  data = data.filter(apk => apk.file !== filename);
-  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
-
-  const filePath = path.join('uploads', filename);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-  res.json({ success: true });
+// ✅ Catch-all route for React routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
+// ✅ Start server on PORT 1000
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
