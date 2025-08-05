@@ -1,81 +1,82 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const cors = require('cors');
+
 const app = express();
-const PORT = process.env.PORT || 1000;
+const PORT = 1000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../frontend/build")));
-app.use("/uploads", express.static("uploads"));
+app.use(express.static('uploads'));
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  destination: function (req, file, cb) {
+    const dir = 'uploads/';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
 const upload = multer({ storage });
 
-// ✅ New simple security code-based admin auth
-app.post("/admin/login", (req, res) => {
+// ✅ Security code-based login (NO username/password)
+const SECURITY_CODE = "GURJANTSANDHU";
+
+app.post('/admin/login', (req, res) => {
   const { code } = req.body;
-  if (code === "GURJANTSANDHU") {
+  if (code === SECURITY_CODE) {
     res.json({ success: true });
   } else {
     res.status(401).json({ success: false, message: "Invalid security code" });
   }
 });
 
-// Upload APK info
-let apkDataFile = "apks.json";
-const loadApkData = () => {
-  if (!fs.existsSync(apkDataFile)) fs.writeFileSync(apkDataFile, "[]");
-  return JSON.parse(fs.readFileSync(apkDataFile));
-};
-const saveApkData = (data) => fs.writeFileSync(apkDataFile, JSON.stringify(data, null, 2));
-
-// Upload route
-app.post("/upload", upload.single("apkFile"), (req, res) => {
-  const { name, description, category, imageUrl } = req.body;
-  const newApk = {
-    id: Date.now(),
-    name,
+// ✅ Upload route
+app.post('/upload', upload.single('apk'), (req, res) => {
+  const { title, description, category } = req.body;
+  const apkInfo = {
+    title,
     description,
     category,
-    imageUrl,
     file: req.file.filename,
+    date: new Date()
   };
-  const data = loadApkData();
-  data.push(newApk);
-  saveApkData(data);
-  res.json({ success: true, apk: newApk });
+
+  let data = [];
+  if (fs.existsSync('data.json')) {
+    data = JSON.parse(fs.readFileSync('data.json'));
+  }
+  data.push(apkInfo);
+  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+  res.json({ success: true, message: 'APK uploaded successfully!' });
 });
 
-// Get all APKs
-app.get("/apks", (req, res) => {
-  const data = loadApkData();
-  res.json(data);
-});
-
-// Delete APK
-app.delete("/apk/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-  let data = loadApkData();
-  const apk = data.find((a) => a.id === id);
-  if (apk) {
-    fs.unlinkSync(path.join("uploads", apk.file));
-    data = data.filter((a) => a.id !== id);
-    saveApkData(data);
-    res.json({ success: true });
+// ✅ Get APK list
+app.get('/apks', (req, res) => {
+  if (fs.existsSync('data.json')) {
+    const data = JSON.parse(fs.readFileSync('data.json'));
+    res.json(data);
   } else {
-    res.status(404).json({ success: false });
+    res.json([]);
   }
 });
 
-// React frontend fallback
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
+// ✅ Delete APK
+app.delete('/apks/:filename', (req, res) => {
+  const filename = req.params.filename;
+  let data = JSON.parse(fs.readFileSync('data.json'));
+  data = data.filter(apk => apk.file !== filename);
+  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+
+  const filePath = path.join('uploads', filename);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+  res.json({ success: true });
 });
 
 app.listen(PORT, () => {

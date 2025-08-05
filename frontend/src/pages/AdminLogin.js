@@ -1,40 +1,40 @@
-import React, { useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from 'react';
+import axios from 'axios';
+import './AdminLogin.css';
 
-function AdminLogin() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const navigate = useNavigate();
+const AdminLogin = ({ onLogin }) => {
+  const [code, setCode] = useState('');
 
-  const handleLogin = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     try {
-      const res = await axios.post("/login", { username, password });
-      localStorage.setItem("token", res.data.token);
-      navigate("/admin/panel");
+      const res = await axios.post('/admin/login', { code });
+      if (res.data.success) {
+        onLogin();
+      } else {
+        alert('Invalid security code');
+      }
     } catch (err) {
-      alert("Invalid username or password");
+      alert('Error logging in');
     }
   };
 
   return (
     <div className="admin-login">
-      <h2>Admin Login</h2>
-      <input
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      /><br/>
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      /><br/>
-      <button onClick={handleLogin}>Login</button>
+      <h2>Enter Security Code</h2>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Enter Security Code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          required
+        />
+        <button type="submit">Enter</button>
+      </form>
     </div>
   );
-}
+};
 
 export default AdminLogin;
+
