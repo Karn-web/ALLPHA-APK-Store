@@ -1,0 +1,129 @@
+.admin-dashboard {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+  background: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+}
+
+.admin-dashboard h2,
+.admin-dashboard h3 {
+  color: #333;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.message {
+  background-color: #e0ffe0;
+  border: 1px solid #5cb85c;
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 5px;
+  color: #3c763d;
+  font-weight: bold;
+  text-align: center;
+}
+
+.apk-upload-form {
+  background-color: white;
+  padding: 20px;
+  border-radius: 6px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.1);
+}
+
+.apk-upload-form .form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.apk-upload-form label {
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #555;
+}
+
+.apk-upload-form input[type="text"],
+.apk-upload-form textarea,
+.apk-upload-form input[type="file"] {
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.apk-upload-form textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.upload-btn {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 12px 18px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background-color 0.3s ease;
+  margin-top: 10px;
+}
+
+.upload-btn:hover {
+  background-color: #45a049;
+}
+
+.apk-list {
+  margin-top: 20px;
+}
+
+.apk-item {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.05);
+}
+
+.apk-image {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  margin-right: 15px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.apk-info {
+  flex: 1;
+}
+
+.apk-info h4 {
+  margin: 0 0 6px 0;
+  color: #222;
+}
+
+.apk-info p {
+  margin: 4px 0;
+  color: #555;
+}
+
+.delete-btn {
+  background-color: #e74c3c;
+  border: none;
+  padding: 8px 12px;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.delete-btn:hover {
+  background-color: #c0392b;
+}
+
